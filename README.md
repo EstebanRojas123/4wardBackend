@@ -1,6 +1,5 @@
-#Backend 4wward
+# Backend 4wward
 
-###instalar dependencias
 
 ### 1. Instalar dependencias
 
