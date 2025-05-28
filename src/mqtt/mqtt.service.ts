@@ -1,38 +1,31 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import * as mqtt from 'mqtt';
+import { createMqttClient } from './mqtt.client';
 
 @Injectable()
-export class MqttService {
+export class MqttService implements OnModuleDestroy {
   private client: mqtt.MqttClient;
-  private lastSensorValue: string = '';
 
-  constructor() {
-    this.client = mqtt.connect('mqtt://:1883'); //llenar con ip de esp32
+  constructor(private configService: ConfigService) {
+    const brokerUrl = this.configService.get<string>('MQTT_BROKER_URL');
 
-    this.client.on('connect', () => {
-      console.log('Conectado al broker MQTT');
-      this.client.subscribe('esp32/sensor/temp', (err) => {
-        if (err) {
-          console.error('Error al suscribirse:', err.message);
-        }
-      });
-    });
+    if (!brokerUrl) {
+      throw new Error('❌ MQTT_BROKER_URL no definido en .env');
+    }
 
-    this.client.on('message', (topic, payload) => {
-      const message = payload.toString();
-      console.log(`Mensaje recibido en ${topic}: ${message}`);
-      if (topic === 'esp32/sensor/temp') {
-        this.lastSensorValue = message;
-      }
-    });
+    this.client = createMqttClient(brokerUrl);
   }
 
   sendCommand(topic: string, message: string) {
-    this.client.publish(topic, message);
+    this.client.publish(topic, message, { qos: 1 }, (err) => {
+      if (err) console.error('❌ Error al publicar:', err.message);
+      else console.log(`✅ Comando enviado: ${topic} -> ${message}`);
+    });
     return { status: 'ok', sent: { topic, message } };
   }
 
-  getSensorValue() {
-    return this.lastSensorValue;
+  onModuleDestroy() {
+    this.client?.end();
   }
 }
